@@ -1,7 +1,7 @@
 
 export enum Scene {
   WELCOME = 'WELCOME',
-  LOGIN = 'LOGIN',
+  AUTH = 'AUTH',
   INTRO = 'INTRO',
   QUIZ = 'QUIZ',
   MEMORY_GAME = 'MEMORY_GAME',

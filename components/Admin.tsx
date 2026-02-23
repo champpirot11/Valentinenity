@@ -1,5 +1,7 @@
 
 import React, { useState } from 'react';
+import { signOut } from 'firebase/auth';
+import { auth } from '../firebase.ts';
 import { AppConfig, QuizQuestion } from '../types.ts';
 
 interface AdminProps {
@@ -18,6 +20,13 @@ export const Admin: React.FC<AdminProps> = ({ config, onSave, onBack }) => {
     onSave(formData);
     alert("บันทึกการตั้งค่าเรียบร้อยแล้ว!");
   };
+
+  const handleSignOut = async () => {
+    if (window.confirm("คุณต้องการออกจากระบบใช่หรือไม่?")) {
+      await signOut(auth);
+    }
+  };
+
 
   const updateField = (field: keyof AppConfig, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -225,7 +234,13 @@ export const Admin: React.FC<AdminProps> = ({ config, onSave, onBack }) => {
           onClick={onBack}
           className="w-full bg-gray-300 hover:bg-gray-400 text-gray-700 py-3 rounded-lg font-bold text-[10px] active:translate-y-1 transition-all"
         >
-          กลับไปหน้าล็อคอิน
+          กลับไปหน้าหลัก
+        </button>
+        <button 
+          onClick={handleSignOut}
+          className="w-full bg-red-100 hover:bg-red-200 text-red-600 py-3 rounded-lg font-bold text-[10px] active:translate-y-1 transition-all border-2 border-red-200"
+        >
+          ออกจากระบบ
         </button>
       </div>
     </div>

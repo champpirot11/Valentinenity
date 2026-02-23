@@ -1,8 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
+import { onAuthStateChanged, User } from 'firebase/auth';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { auth, db } from './firebase.ts';
 import { Layout } from './components/Layout.tsx';
 import { Welcome } from './components/Welcome.tsx';
-import { Login, LoginDestination } from './components/Login.tsx';
+import { Auth } from './components/Auth.tsx';
 import { Intro } from './components/Intro.tsx';
 import { Quiz } from './components/Quiz.tsx';
 import { MemoryGame } from './components/MemoryGame.tsx';
@@ -35,41 +38,63 @@ const DEFAULT_CONFIG: AppConfig = {
 };
 
 function App() {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
   const [scene, setScene] = useState<Scene>(Scene.WELCOME);
   const [isTestMode, setIsTestMode] = useState(false);
-  const [config, setConfig] = useState<AppConfig>(() => {
-    const saved = localStorage.getItem('valentine_quest_config');
-    return saved ? JSON.parse(saved) : DEFAULT_CONFIG;
-  });
+  const [config, setConfig] = useState<AppConfig>(DEFAULT_CONFIG);
 
-  const handleLoginSuccess = (destination: LoginDestination) => {
-    if (destination === 'ADMIN' as any) {
-      setScene(Scene.ADMIN);
-      return;
-    }
-    
-    switch (destination) {
-      case 'GACHA':
-        setScene(Scene.GACHA);
-        break;
-      case 'MEMORIES':
-        setIsTestMode(false);
-        setScene(Scene.KEEP_MEMORIES);
-        break;
-      case 'MEMORIES_TEST':
-        setIsTestMode(true);
-        setScene(Scene.KEEP_MEMORIES);
-        break;
-      case 'INTRO':
-      default:
-        setScene(Scene.INTRO);
-        break;
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        await fetchConfig(currentUser.uid);
+      } else {
+        setConfig(DEFAULT_CONFIG);
+        setScene(Scene.AUTH);
+      }
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const fetchConfig = async (uid: string) => {
+    try {
+      const docRef = doc(db, 'users', uid);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        setConfig(docSnap.data().config);
+      } else {
+        // Create initial config for new user
+        const initialData = {
+          email: auth.currentUser?.email,
+          createdAt: serverTimestamp(),
+          config: DEFAULT_CONFIG
+        };
+        await setDoc(docRef, initialData);
+        setConfig(DEFAULT_CONFIG);
+      }
+    } catch (error) {
+      console.error("Error fetching config:", error);
     }
   };
 
-  const saveConfig = (newConfig: AppConfig) => {
-    setConfig(newConfig);
-    localStorage.setItem('valentine_quest_config', JSON.stringify(newConfig));
+  const saveConfig = async (newConfig: AppConfig) => {
+    if (!user) return;
+    try {
+      const docRef = doc(db, 'users', user.uid);
+      await setDoc(docRef, { config: newConfig }, { merge: true });
+      setConfig(newConfig);
+    } catch (error) {
+      console.error("Error saving config:", error);
+      alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล");
+    }
+  };
+
+  const handleAuthSuccess = () => {
+    setScene(Scene.INTRO);
   };
 
   const handleReset = () => {
@@ -77,12 +102,23 @@ function App() {
     setIsTestMode(false);
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-green-50">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-green-500 border-t-transparent rounded-full animate-spin"></div>
+          <p className="font-['Kanit'] font-bold text-green-700">กำลังโหลดข้อมูล...</p>
+        </div>
+      </div>
+    );
+  }
+
   const renderScene = () => {
     switch (scene) {
       case Scene.WELCOME:
-        return <Welcome onStart={() => setScene(Scene.LOGIN)} config={config} />;
-      case Scene.LOGIN:
-        return <Login onSuccess={handleLoginSuccess} config={config} />;
+        return <Welcome onStart={() => setScene(user ? Scene.INTRO : Scene.AUTH)} config={config} />;
+      case Scene.AUTH:
+        return <Auth onSuccess={handleAuthSuccess} />;
       case Scene.INTRO:
         return <Intro onNext={() => setScene(Scene.QUIZ)} config={config} />;
       case Scene.QUIZ:
@@ -98,17 +134,28 @@ function App() {
       case Scene.KEEP_MEMORIES:
         return <KeepMemories onRestart={handleReset} testMode={isTestMode} config={config} />;
       case Scene.ADMIN:
-        return <Admin config={config} onSave={saveConfig} onBack={() => setScene(Scene.LOGIN)} />;
+        return <Admin config={config} onSave={saveConfig} onBack={() => setScene(Scene.INTRO)} />;
       default:
-        return <Welcome onStart={() => setScene(Scene.LOGIN)} config={config} />;
+        return <Welcome onStart={() => setScene(user ? Scene.INTRO : Scene.AUTH)} config={config} />;
     }
   };
 
   return (
     <Layout config={config}>
+      {user && scene !== Scene.ADMIN && (
+        <div className="fixed top-4 right-4 z-50 flex gap-2">
+          <button 
+            onClick={() => setScene(Scene.ADMIN)}
+            className="bg-gray-800 text-white p-2 rounded-lg text-xs font-bold border-b-2 border-gray-900 active:translate-y-0.5"
+          >
+            ⚙️ ตั้งค่า
+          </button>
+        </div>
+      )}
       {renderScene()}
     </Layout>
   );
 }
 
 export default App;
+
