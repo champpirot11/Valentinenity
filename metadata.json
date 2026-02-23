@@ -1,6 +1,6 @@
 {
   "name": "Valentine Quest 2024",
-  "description": "An 8-bit Retro Valentine's Day Game inspired by GameBoy aesthetics.",
+  "description": "A feature-rich Valentine's Day quest with Firebase Auth, Firestore, and Cloudinary integration.",
   "requestFramePermissions": [
     "camera"
   ]

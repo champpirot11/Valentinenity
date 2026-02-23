@@ -1,11 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, useParams, useNavigate, useLocation } from 'react-router-dom';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './firebase.ts';
 import { Layout } from './components/Layout.tsx';
-import { Welcome } from './components/Welcome.tsx';
 import { Auth } from './components/Auth.tsx';
+import { Setup } from './components/Setup.tsx';
+import { Dashboard } from './components/Dashboard.tsx';
 import { Intro } from './components/Intro.tsx';
 import { Quiz } from './components/Quiz.tsx';
 import { MemoryGame } from './components/MemoryGame.tsx';
@@ -14,6 +16,9 @@ import { LevelUp } from './components/LevelUp.tsx';
 import { Gacha } from './components/Gacha.tsx';
 import { KeepMemories } from './components/KeepMemories.tsx';
 import { Admin } from './components/Admin.tsx';
+import { PhotoGallery } from './components/PhotoGallery.tsx';
+import { PlayerLogin } from './components/PlayerLogin.tsx';
+import { Welcome } from './components/Welcome.tsx';
 import { Scene, AppConfig } from './types.ts';
 
 const DEFAULT_CONFIG: AppConfig = {
@@ -23,82 +28,126 @@ const DEFAULT_CONFIG: AppConfig = {
   secondaryColor: 'pink',
   partnerName: 'Oui',
   specialDate: '29062544',
+  hint1: 'วันเกิดเค้าไง',
+  hint2: 'DDMMYYYY นะ',
   questions: [
     {
       question: "แชมป์ชอบกินอะไร?",
       options: ["ข้าวผัดใส่แครอทเยอะๆ", "ผัดพริกแกงไก่เผ็ดๆ", "ถั่วลันเตา", "ข้าวกะเพราหมูกรอบ"],
       correctIndex: 0
-    },
-    {
-      question: "เราเจอกันที่ไหน?",
-      options: ["ทินเดอร์", "ห้องสมุด", "วัด", "บนบีทีเอส"],
-      correctIndex: 0 
     }
-  ]
+  ],
+  gifts: [],
+  finalMessage: 'ขอบคุณที่เป็นส่วนหนึ่งในชีวิตฉัน...',
+  finalImageUrl: ''
 };
 
-function App() {
+function AppContent() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [scene, setScene] = useState<Scene>(Scene.WELCOME);
+  const [scene, setScene] = useState<Scene>(Scene.AUTH);
   const [isTestMode, setIsTestMode] = useState(false);
   const [config, setConfig] = useState<AppConfig>(DEFAULT_CONFIG);
+  const [isSetupComplete, setIsSetupComplete] = useState(false);
+  
+  const { userId } = useParams<{ userId: string }>();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        await fetchConfig(currentUser.uid);
+        // If we are on a play route, we don't want to redirect to dashboard automatically
+        // unless the user specifically wants to manage their own app.
+        if (!location.pathname.startsWith('/play/')) {
+          await fetchUserStatus(currentUser.uid);
+        }
       } else {
-        setConfig(DEFAULT_CONFIG);
-        setScene(Scene.AUTH);
+        if (!location.pathname.startsWith('/play/')) {
+          setScene(Scene.AUTH);
+        }
       }
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [location.pathname]);
 
-  const fetchConfig = async (uid: string) => {
+  // Handle Player Mode
+  useEffect(() => {
+    if (userId) {
+      fetchPlayerConfig(userId);
+    }
+  }, [userId]);
+
+  const fetchUserStatus = async (uid: string) => {
     try {
       const docRef = doc(db, 'users', uid);
       const docSnap = await getDoc(docRef);
 
       if (docSnap.exists()) {
-        setConfig(docSnap.data().config);
+        const data = docSnap.data();
+        const mergedConfig = { ...DEFAULT_CONFIG, ...(data.config || {}) };
+        setConfig(mergedConfig);
+        setIsSetupComplete(data.isSetupComplete || false);
+        setScene(data.isSetupComplete ? Scene.DASHBOARD : Scene.SETUP);
       } else {
-        // Create initial config for new user
-        const initialData = {
-          email: auth.currentUser?.email,
-          createdAt: serverTimestamp(),
-          config: DEFAULT_CONFIG
-        };
-        await setDoc(docRef, initialData);
-        setConfig(DEFAULT_CONFIG);
+        // New user
+        setIsSetupComplete(false);
+        setScene(Scene.SETUP);
       }
     } catch (error) {
-      console.error("Error fetching config:", error);
+      console.error("Error fetching user status:", error);
     }
   };
 
-  const saveConfig = async (newConfig: AppConfig) => {
+  const fetchPlayerConfig = async (uid: string) => {
+    setLoading(true);
+    try {
+      const docRef = doc(db, 'users', uid);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const mergedConfig = { ...DEFAULT_CONFIG, ...(docSnap.data().config || {}) };
+        setConfig(mergedConfig);
+        setScene(Scene.PLAYER_LOGIN);
+      } else {
+        alert("ไม่พบข้อมูลผู้ใช้นี้");
+        navigate('/');
+      }
+    } catch (error) {
+      console.error("Error fetching player config:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveConfig = async (newConfig: AppConfig, setupComplete: boolean = true) => {
     if (!user) return;
     try {
       const docRef = doc(db, 'users', user.uid);
-      await setDoc(docRef, { config: newConfig }, { merge: true });
+      await setDoc(docRef, { 
+        config: newConfig, 
+        isSetupComplete: setupComplete,
+        email: user.email,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      
       setConfig(newConfig);
+      setIsSetupComplete(setupComplete);
+      setScene(Scene.DASHBOARD);
     } catch (error) {
       console.error("Error saving config:", error);
       alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล");
     }
   };
 
-  const handleAuthSuccess = () => {
-    setScene(Scene.INTRO);
-  };
-
   const handleReset = () => {
-    setScene(Scene.WELCOME);
+    if (userId) {
+      setScene(Scene.PLAYER_LOGIN);
+    } else {
+      setScene(Scene.DASHBOARD);
+    }
     setIsTestMode(false);
   };
 
@@ -115,10 +164,24 @@ function App() {
 
   const renderScene = () => {
     switch (scene) {
-      case Scene.WELCOME:
-        return <Welcome onStart={() => setScene(user ? Scene.INTRO : Scene.AUTH)} config={config} />;
       case Scene.AUTH:
-        return <Auth onSuccess={handleAuthSuccess} />;
+        return <Auth onSuccess={() => fetchUserStatus(auth.currentUser!.uid)} />;
+      case Scene.SETUP:
+        return <Setup config={config} onSave={(cfg) => saveConfig(cfg, true)} />;
+      case Scene.DASHBOARD:
+        return (
+          <Dashboard 
+            config={config} 
+            user={user!} 
+            onEdit={() => setScene(Scene.ADMIN)} 
+            onTest={() => { setIsTestMode(true); setScene(Scene.PLAYER_LOGIN); }}
+            onGallery={() => setScene(Scene.PHOTO_GALLERY)}
+          />
+        );
+      case Scene.PLAYER_LOGIN:
+        return <PlayerLogin config={config} onSuccess={() => setScene(Scene.INTRO)} isTestMode={isTestMode} />;
+      case Scene.WELCOME:
+        return <Welcome config={config} onStart={() => setScene(Scene.PLAYER_LOGIN)} />;
       case Scene.INTRO:
         return <Intro onNext={() => setScene(Scene.QUIZ)} config={config} />;
       case Scene.QUIZ:
@@ -130,32 +193,48 @@ function App() {
       case Scene.LEVEL_UP:
         return <LevelUp onComplete={() => setScene(Scene.GACHA)} config={config} />;
       case Scene.GACHA:
-        return <Gacha onReset={handleReset} onKeepMemories={() => setScene(Scene.KEEP_MEMORIES)} config={config} />;
+        return (
+          <Gacha 
+            gifts={config.gifts} 
+            finalMessage={config.finalMessage} 
+            finalImageUrl={config.finalImageUrl}
+            onComplete={() => setScene(Scene.KEEP_MEMORIES)} 
+          />
+        );
       case Scene.KEEP_MEMORIES:
-        return <KeepMemories onRestart={handleReset} testMode={isTestMode} config={config} />;
+        return (
+          <KeepMemories 
+            userId={userId || user?.uid || ''} 
+            onComplete={handleReset} 
+          />
+        );
       case Scene.ADMIN:
-        return <Admin config={config} onSave={saveConfig} onBack={() => setScene(Scene.INTRO)} />;
+        return <Admin config={config} onSave={(cfg) => saveConfig(cfg, true)} onBack={() => setScene(Scene.DASHBOARD)} />;
+      case Scene.PHOTO_GALLERY:
+        return <PhotoGallery userId={user?.uid || ''} onBack={() => setScene(Scene.DASHBOARD)} />;
       default:
-        return <Welcome onStart={() => setScene(user ? Scene.INTRO : Scene.AUTH)} config={config} />;
+        return <Auth onSuccess={() => fetchUserStatus(auth.currentUser!.uid)} />;
     }
   };
 
   return (
     <Layout config={config}>
-      {user && scene !== Scene.ADMIN && (
-        <div className="fixed top-4 right-4 z-50 flex gap-2">
-          <button 
-            onClick={() => setScene(Scene.ADMIN)}
-            className="bg-gray-800 text-white p-2 rounded-lg text-xs font-bold border-b-2 border-gray-900 active:translate-y-0.5"
-          >
-            ⚙️ ตั้งค่า
-          </button>
-        </div>
-      )}
       {renderScene()}
     </Layout>
   );
 }
 
+function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<AppContent />} />
+        <Route path="/play/:userId" element={<AppContent />} />
+      </Routes>
+    </Router>
+  );
+}
+
 export default App;
+
 
