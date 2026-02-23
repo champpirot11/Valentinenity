@@ -1,34 +1,28 @@
 
 import React, { useState, useEffect } from 'react';
-import { QuizQuestion } from '../types.ts';
+import { QuizQuestion, AppConfig } from '../types.ts';
 
 interface QuizProps {
   onComplete: () => void;
+  config: AppConfig;
 }
 
-const QUESTIONS: QuizQuestion[] = [
-  {
-    question: "แชมป์ชอบกินอะไร?",
-    options: ["ข้าวผัดใส่แครอทเยอะๆ", "ผัดพริกแกงไก่เผ็ดๆ", "ถั่วลันเตา", "ข้าวกะเพราหมูกรอบ"],
-    correctIndex: 0
-  },
-  {
-    question: "เราเจอกันที่ไหน?",
-    options: ["ทินเดอร์", "ห้องสมุด", "วัด", "บนบีทีเอส"],
-    correctIndex: 0 
-  },
-  {
-    question: "แชมป์ชื่อจริงว่าอะไร?",
-    options: ["ภานุพงศ์ เพ็งอ่วม", "สุจริต พิชิตวังวน", "เทพกร ทรพี", "ณเดช คุกิมิยะ"],
-    correctIndex: 0
-  }
-];
-
-export const Quiz: React.FC<QuizProps> = ({ onComplete }) => {
+export const Quiz: React.FC<QuizProps> = ({ onComplete, config }) => {
   const [currentQIndex, setCurrentQIndex] = useState(0);
   const [feedback, setFeedback] = useState<'CORRECT' | 'WRONG' | null>(null);
   const [shuffledOptions, setShuffledOptions] = useState<{text: string, originalIndex: number}[]>([]);
   const [showEndDialogue, setShowEndDialogue] = useState(false);
+
+  // Use dynamic questions from config
+  const QUESTIONS = config.questions && config.questions.length > 0 
+    ? config.questions 
+    : [
+        {
+          question: "แชมป์ชอบกินอะไร?",
+          options: ["ข้าวผัดใส่แครอทเยอะๆ", "ผัดพริกแกงไก่เผ็ดๆ", "ถั่วลันเตา", "ข้าวกะเพราหมูกรอบ"],
+          correctIndex: 0
+        }
+      ];
 
   const currentQ = QUESTIONS[currentQIndex];
 
@@ -40,7 +34,7 @@ export const Quiz: React.FC<QuizProps> = ({ onComplete }) => {
         originalIndex: i
       }));
       // Simple shuffle
-      const shuffled = optionsWithIndex.sort(() => Math.random() - 0.5);
+      const shuffled = [...optionsWithIndex].sort(() => Math.random() - 0.5);
       setShuffledOptions(shuffled);
     }
   }, [currentQIndex, currentQ]);
@@ -99,17 +93,17 @@ export const Quiz: React.FC<QuizProps> = ({ onComplete }) => {
         ))}
       </div>
 
-      {/* Feedback Dialogue Box - Standardized Bottom Anchor */}
+      {/* Feedback Dialogue Box */}
       {feedback && (
         <div className="absolute inset-x-0 bottom-0 z-20 animate-float -mx-6 -mb-6">
           <div className="bg-white border-t-4 border-gray-900 p-6 relative shadow-[0_-4px_10px_rgba(0,0,0,0.1)]">
              <div className="absolute -top-3 left-4 bg-green-100 px-2 border-2 border-gray-900 text-[10px] font-bold text-green-800 uppercase tracking-wider transform -rotate-2">
-              Champ says:
+              {config.adminName} says:
             </div>
             
             <div className="flex gap-4 items-center mt-1">
                <div className="text-4xl drop-shadow">
-                  🧙🏻‍♂️
+                  {config.dialogueEmoji}
                </div>
                <div className="flex-1">
                   <p className={`text-sm leading-tight typewriter-cursor font-bold font-['Kanit'] ${feedback === 'CORRECT' ? 'text-green-700' : 'text-red-600'}`}>
@@ -121,17 +115,17 @@ export const Quiz: React.FC<QuizProps> = ({ onComplete }) => {
         </div>
       )}
 
-      {/* End Level Dialogue - Standardized Bottom Anchor */}
+      {/* End Level Dialogue */}
       {showEndDialogue && (
         <div className="absolute inset-x-0 bottom-0 z-30 animate-float -mx-6 -mb-6">
           <div className="bg-white border-t-4 border-gray-900 p-6 relative shadow-[0_-4px_10px_rgba(0,0,0,0.1)]">
             <div className="absolute -top-3 left-4 bg-green-100 px-2 border-2 border-gray-900 text-[10px] font-bold text-green-800 uppercase tracking-wider transform -rotate-2">
-              Champ says:
+              {config.adminName} says:
             </div>
             
             <div className="flex gap-4 items-center mt-1">
                <div className="text-4xl drop-shadow">
-                  🧙🏻‍♂️
+                  {config.dialogueEmoji}
                </div>
                <div className="flex-1 flex flex-col items-start gap-2">
                   <p className="text-sm text-green-900 leading-tight typewriter-cursor font-bold font-['Kanit']">

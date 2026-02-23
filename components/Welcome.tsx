@@ -1,10 +1,13 @@
+
 import React, { useState } from 'react';
+import { AppConfig } from '../types.ts';
 
 interface WelcomeProps {
   onStart: () => void;
+  config: AppConfig;
 }
 
-export const Welcome: React.FC<WelcomeProps> = ({ onStart }) => {
+export const Welcome: React.FC<WelcomeProps> = ({ onStart, config }) => {
   const [clickCount, setClickCount] = useState(0);
 
   const handleNoClick = (e: React.MouseEvent) => {
@@ -26,7 +29,7 @@ export const Welcome: React.FC<WelcomeProps> = ({ onStart }) => {
     <div className="flex flex-col items-center justify-between h-full py-8 text-center overflow-hidden">
       <div className="animate-float">
         <h1 className="text-xl leading-tight text-green-800 drop-shadow-sm mb-4">
-          VALENTINE<br />QUEST<br /><span className="text-xs text-green-700 mt-2 block">VERSION 2026</span>
+          VALENTINE<br />QUEST<br /><span className="text-xs text-green-700 mt-2 block">FOR {config.partnerName.toUpperCase()}</span>
         </h1>
         
         {/* 8-bit Characters Placeholder */}
@@ -60,7 +63,7 @@ export const Welcome: React.FC<WelcomeProps> = ({ onStart }) => {
       </div>
 
       <div className="text-[8px] text-green-800 font-bold mt-4">
-        © 2026 CHAMP JA.
+        © 2026 {config.adminName.toUpperCase()} JA.
       </div>
     </div>
   );
