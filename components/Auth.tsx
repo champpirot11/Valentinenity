@@ -1,41 +1,17 @@
 import React, { useState } from 'react';
-import { 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword 
-} from 'firebase/auth';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../firebase.ts';
 
 interface AuthProps {
   onSuccess: () => void;
 }
 
-type AuthMode = 'LOGIN' | 'REGISTER';
-
 export const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
-  const [mode, setMode] = useState<AuthMode>('LOGIN');
+  const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-
-  const translateError = (code: string) => {
-    switch (code) {
-      case 'auth/email-already-in-use':
-        return "อีเมลนี้ถูกใช้งานแล้ว";
-      case 'auth/invalid-email':
-        return "รูปแบบอีเมลไม่ถูกต้อง";
-      case 'auth/weak-password':
-        return "รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร";
-      case 'auth/user-not-found':
-        return "ไม่พบบัญชีผู้ใช้นี้";
-      case 'auth/wrong-password':
-        return "รหัสผ่านไม่ถูกต้อง";
-      case 'auth/invalid-credential':
-        return "อีเมลหรือรหัสผ่านไม่ถูกต้อง";
-      default:
-        return "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง";
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,103 +19,108 @@ export const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
     setLoading(true);
 
     try {
-      if (mode === 'REGISTER') {
-        if (password.length < 6) {
-          throw { code: 'auth/weak-password' };
-        }
-        await createUserWithEmailAndPassword(auth, email, password);
-      } else {
+      if (isLogin) {
         await signInWithEmailAndPassword(auth, email, password);
+      } else {
+        await createUserWithEmailAndPassword(auth, email, password);
       }
       onSuccess();
     } catch (err: any) {
-      console.error(err);
-      setError(translateError(err.code));
-    } finally {
-      setLoading(false);
+      const errorMessages: { [key: string]: string } = {
+        'auth/email-already-in-use': 'อีเมลนี้ถูกใช้งานแล้ว',
+        'auth/invalid-email': 'รูปแบบอีเมลไม่ถูกต้อง',
+        'auth/weak-password': 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร',
+        'auth/user-not-found': 'ไม่พบบัญชีผู้ใช้นี้',
+        'auth/wrong-password': 'รหัสผ่านไม่ถูกต้อง',
+        'auth/invalid-credential': 'อีเมลหรือรหัสผ่านไม่ถูกต้อง',
+      };
+      setError(errorMessages[err.code] || 'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง');
     }
+    setLoading(false);
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[400px] p-6 font-['Kanit']">
-      <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-xl border-4 border-gray-900">
-        {/* Tabs */}
-        <div className="flex mb-8 bg-gray-100 p-1 rounded-xl border-2 border-gray-200">
-          <button
-            onClick={() => { setMode('LOGIN'); setError(''); }}
-            className={`flex-1 py-3 rounded-lg font-bold transition-all ${
-              mode === 'LOGIN' 
-                ? 'bg-white text-blue-600 shadow-sm border-2 border-blue-500' 
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            เข้าสู่ระบบ
-          </button>
-          <button
-            onClick={() => { setMode('REGISTER'); setError(''); }}
-            className={`flex-1 py-3 rounded-lg font-bold transition-all ${
-              mode === 'REGISTER' 
-                ? 'bg-white text-green-600 shadow-sm border-2 border-green-500' 
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            ลงทะเบียน
-          </button>
+    <div className="flex flex-col items-center justify-center min-h-[500px] px-4 font-['Kanit']">
+      <div className="w-full max-w-md">
+        <h1 className="text-3xl font-bold text-center mb-8 text-gray-900">
+          💕 Valentine Quest
+        </h1>
+
+        <div className="bg-white rounded-[2.5rem] shadow-2xl p-8 border-4 border-gray-900">
+          {/* Tabs */}
+          <div className="flex gap-2 mb-6 bg-gray-100 p-1 rounded-2xl">
+            <button
+              onClick={() => setIsLogin(true)}
+              className={`flex-1 py-3 rounded-xl font-bold transition-all ${
+                isLogin
+                  ? 'bg-pink-500 text-white shadow-lg'
+                  : 'text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              เข้าสู่ระบบ
+            </button>
+            <button
+              onClick={() => setIsLogin(false)}
+              className={`flex-1 py-3 rounded-xl font-bold transition-all ${
+                !isLogin
+                  ? 'bg-pink-500 text-white shadow-lg'
+                  : 'text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              สมัครสมาชิก
+            </button>
+          </div>
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2 ml-1">
+                อีเมล
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-4 py-3 border-2 border-gray-100 bg-gray-50 rounded-xl focus:border-pink-500 focus:bg-white outline-none transition-all"
+                placeholder="example@email.com"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2 ml-1">
+                รหัสผ่าน
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-4 py-3 border-2 border-gray-100 bg-gray-50 rounded-xl focus:border-pink-500 focus:bg-white outline-none transition-all"
+                placeholder="อย่างน้อย 6 ตัวอักษร"
+                required
+                minLength={6}
+              />
+            </div>
+
+            {error && (
+              <div className="bg-red-50 border-2 border-red-200 rounded-xl p-3 animate-shake">
+                <p className="text-red-700 text-sm font-bold">⚠️ {error}</p>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-pink-500 hover:bg-pink-600 text-white py-4 rounded-xl font-bold shadow-lg border-b-4 border-pink-700 active:border-b-0 active:translate-y-1 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? 'กำลังดำเนินการ...' : isLogin ? 'เข้าสู่ระบบ' : 'สมัครสมาชิก'}
+            </button>
+          </form>
         </div>
 
-        <h2 className="text-2xl font-bold text-center mb-6 text-gray-800">
-          {mode === 'LOGIN' ? 'ยินดีต้อนรับกลับมา! 👋' : 'สร้างบัญชีใหม่ ✨'}
-        </h2>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-bold text-gray-600 mb-1">อีเมล</label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full p-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 outline-none transition-all"
-              placeholder="example@email.com"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-bold text-gray-600 mb-1">รหัสผ่าน</label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full p-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 outline-none transition-all"
-              placeholder="••••••"
-            />
-          </div>
-
-          {error && (
-            <div className="p-3 bg-red-50 border-2 border-red-200 text-red-600 rounded-xl text-sm font-bold animate-shake">
-              ⚠️ {error}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className={`w-full py-4 rounded-xl font-bold text-white transition-all border-b-4 active:translate-y-1 active:border-b-0 ${
-              mode === 'LOGIN' 
-                ? 'bg-blue-600 border-blue-800 hover:bg-blue-700' 
-                : 'bg-green-600 border-green-800 hover:bg-green-700'
-            } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-          >
-            {loading ? (
-              <div className="flex items-center justify-center gap-2">
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                กำลังดำเนินการ...
-              </div>
-            ) : (
-              mode === 'LOGIN' ? 'เข้าสู่ระบบ' : 'ลงทะเบียน'
-            )}
-          </button>
-        </form>
+        <p className="text-center text-gray-500 text-sm mt-6 font-medium">
+          สร้างเกมพิเศษสำหรับคนที่คุณรัก 💕
+        </p>
       </div>
     </div>
   );

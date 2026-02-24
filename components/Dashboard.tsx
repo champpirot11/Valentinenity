@@ -27,7 +27,7 @@ interface DashboardProps {
 
 export const Dashboard: React.FC<DashboardProps> = ({ config, user, onEdit, onTest, onGallery }) => {
   const [copied, setCopied] = useState(false);
-  const playUrl = `${window.location.origin}/play/${user.uid}`;
+  const playUrl = `${window.location.origin}/?playerId=${user.uid}`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(playUrl);

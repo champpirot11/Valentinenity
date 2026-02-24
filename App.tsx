@@ -48,38 +48,41 @@ function AppContent() {
   const [scene, setScene] = useState<Scene>(Scene.AUTH);
   const [isTestMode, setIsTestMode] = useState(false);
   const [config, setConfig] = useState<AppConfig>(DEFAULT_CONFIG);
-  const [isSetupComplete, setIsSetupComplete] = useState(false);
+  const [isPlayerMode, setIsPlayerMode] = useState(false);
   
-  const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Check for Player Mode via Query Params
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const playerId = params.get('playerId');
+    
+    if (playerId) {
+      setIsPlayerMode(true);
+      fetchPlayerConfig(playerId);
+    }
+  }, [location.search]);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      // If we are in player mode, we don't handle auth state for the creator
+      if (new URLSearchParams(window.location.search).get('playerId')) {
+        setUser(currentUser);
+        return;
+      }
+
       setUser(currentUser);
       if (currentUser) {
-        // If we are on a play route, we don't want to redirect to dashboard automatically
-        // unless the user specifically wants to manage their own app.
-        if (!location.pathname.startsWith('/play/')) {
-          await fetchUserStatus(currentUser.uid);
-        }
+        await fetchUserStatus(currentUser.uid);
       } else {
-        if (!location.pathname.startsWith('/play/')) {
-          setScene(Scene.AUTH);
-        }
+        setScene(Scene.AUTH);
       }
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, [location.pathname]);
-
-  // Handle Player Mode
-  useEffect(() => {
-    if (userId) {
-      fetchPlayerConfig(userId);
-    }
-  }, [userId]);
+  }, []);
 
   const fetchUserStatus = async (uid: string) => {
     try {
@@ -90,15 +93,28 @@ function AppContent() {
         const data = docSnap.data();
         const mergedConfig = { ...DEFAULT_CONFIG, ...(data.config || {}) };
         setConfig(mergedConfig);
-        setIsSetupComplete(data.isSetupComplete || false);
-        setScene(data.isSetupComplete ? Scene.DASHBOARD : Scene.SETUP);
+        
+        if (data.isSetupComplete === true) {
+          setScene(Scene.DASHBOARD);
+        } else {
+          setScene(Scene.SETUP);
+        }
       } else {
-        // New user
-        setIsSetupComplete(false);
+        // New user doc
+        await setDoc(doc(db, 'users', uid), {
+          email: auth.currentUser?.email,
+          createdAt: serverTimestamp(),
+          isSetupComplete: false,
+          config: DEFAULT_CONFIG
+        });
+        setConfig(DEFAULT_CONFIG);
         setScene(Scene.SETUP);
       }
     } catch (error) {
       console.error("Error fetching user status:", error);
+      setScene(Scene.AUTH);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -113,10 +129,12 @@ function AppContent() {
         setScene(Scene.PLAYER_LOGIN);
       } else {
         alert("ไม่พบข้อมูลผู้ใช้นี้");
-        navigate('/');
+        setScene(Scene.AUTH);
       }
     } catch (error) {
       console.error("Error fetching player config:", error);
+      alert("เกิดข้อผิดพลาดในการโหลดข้อมูล");
+      setScene(Scene.AUTH);
     } finally {
       setLoading(false);
     }
@@ -134,8 +152,9 @@ function AppContent() {
       }, { merge: true });
       
       setConfig(newConfig);
-      setIsSetupComplete(setupComplete);
-      setScene(Scene.DASHBOARD);
+      if (setupComplete) {
+        setScene(Scene.DASHBOARD);
+      }
     } catch (error) {
       console.error("Error saving config:", error);
       alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล");
@@ -143,7 +162,7 @@ function AppContent() {
   };
 
   const handleReset = () => {
-    if (userId) {
+    if (isPlayerMode || isTestMode) {
       setScene(Scene.PLAYER_LOGIN);
     } else {
       setScene(Scene.DASHBOARD);
@@ -153,19 +172,21 @@ function AppContent() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-green-50">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-green-500 border-t-transparent rounded-full animate-spin"></div>
-          <p className="font-['Kanit'] font-bold text-green-700">กำลังโหลดข้อมูล...</p>
+      <Layout config={config}>
+        <div className="flex items-center justify-center h-full min-h-[400px]">
+          <div className="text-center space-y-4">
+            <div className="w-12 h-12 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+            <p className="font-['Kanit'] font-bold text-pink-600">กำลังโหลดข้อมูล...</p>
+          </div>
         </div>
-      </div>
+      </Layout>
     );
   }
 
   const renderScene = () => {
     switch (scene) {
       case Scene.AUTH:
-        return <Auth onSuccess={() => fetchUserStatus(auth.currentUser!.uid)} />;
+        return <Auth onSuccess={() => {}} />;
       case Scene.SETUP:
         return <Setup config={config} onSave={(cfg) => saveConfig(cfg, true)} />;
       case Scene.DASHBOARD:
@@ -204,7 +225,7 @@ function AppContent() {
       case Scene.KEEP_MEMORIES:
         return (
           <KeepMemories 
-            userId={userId || user?.uid || ''} 
+            userId={isPlayerMode ? (new URLSearchParams(location.search).get('playerId') || '') : (user?.uid || '')} 
             onComplete={handleReset} 
           />
         );
@@ -213,7 +234,7 @@ function AppContent() {
       case Scene.PHOTO_GALLERY:
         return <PhotoGallery userId={user?.uid || ''} onBack={() => setScene(Scene.DASHBOARD)} />;
       default:
-        return <Auth onSuccess={() => fetchUserStatus(auth.currentUser!.uid)} />;
+        return <Auth onSuccess={() => {}} />;
     }
   };
 
@@ -229,7 +250,6 @@ function App() {
     <Router>
       <Routes>
         <Route path="/" element={<AppContent />} />
-        <Route path="/play/:userId" element={<AppContent />} />
       </Routes>
     </Router>
   );
